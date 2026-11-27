@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Master + Mirror Screens</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--text:#1d1d1b;--muted:#6b6b66;--accent:#d9622b;--border:#dcdad4;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#222221;--text:#f1f0ec;--muted:#9a9a93;--accent:#f08a54;--border:#3a3a38;color-scheme:dark}}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:14px;box-sizing:border-box}
+h1{font-size:18px;margin:0 0 10px}
+h2{font-size:13px;color:var(--muted);margin:12px 0 6px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input{padding:11px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;min-width:0}
+#url{flex:1 1 100%}
+select{flex:1;padding:11px 8px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:15px;min-width:0}
+button{flex:1;padding:11px 8px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:15px}
+button.go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+#masterWrap{position:sticky;top:0;z-index:5;background:var(--bg);padding:4px 0 8px}
+.nav{display:flex;gap:8px;align-items:center;margin:10px 0}
+.nav .info{flex:2;text-align:center;font-size:13px;color:var(--muted)}
+.jump{width:100px;flex:none}
+.grid{display:grid;gap:0 12px}
+.screen{height:300px;margin-bottom:12px;border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;background:var(--card)}
+.screen.master{height:230px;margin:0;border:2px solid var(--accent)}
+.cover{position:absolute;inset:0;z-index:1}
+.tag{position:absolute;top:6px;left:6px;z-index:3;font-size:12px;font-weight:600;background:var(--accent);color:#fff;padding:2px 8px;border-radius:8px}
+iframe{width:100%;height:100%;border:0;display:block}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:var(--muted);font-size:14px}
+button,.screen.mirror{position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.rip{position:absolute;border-radius:50%;pointer-events:none;background:var(--accent);opacity:.45;width:40px;height:40px;margin:-20px 0 0 -20px;animation:rip .6s ease-out forwards;z-index:4}
+@keyframes rip{from{transform:scale(0);opacity:.5}to{transform:scale(7);opacity:0}}
+.popfx{animation:popfx .35s ease}
+@keyframes popfx{0%{transform:scale(1)}35%{transform:scale(.92) rotate(-1deg)}70%{transform:scale(1.04) rotate(1deg)}100%{transform:scale(1)}}
+.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.inR{animation:inR .35s ease}
+@keyframes inR{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+.spark{position:fixed;width:9px;height:9px;border-radius:50%;pointer-events:none;z-index:99}
+details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:10px 0}
+summary{font-weight:600;font-size:14px}
+.cut{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.cut label{font-size:12px;color:var(--muted)}
+.cut select,.cut input[type=number],.cut input[type=file]{width:100%;box-sizing:border-box}
+.cut video{width:100%;max-height:260px;background:#000;border-radius:10px}
+.row{display:flex;gap:8px}
+#cres a{display:block;padding:10px;margin-top:6px;border:1px solid var(--border);border-radius:10px;color:var(--accent);text-decoration:none;font-size:14px}
+.note{font-size:12px;color:var(--muted);margin:12px 0 0;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Master + Mirror Screens</h1>
+<div class="bar">
+  <input id="url" type="url" placeholder="Paste one link here..." autocomplete="off">
+  <button id="paste">Paste</button>
+  <select id="cnt" aria-label="Number of mirror screens"></select>
+  <button id="go" class="go">Open</button>
+  <button id="snd">Sound: On</button>
+  <button id="ext">Like / Follow page</button>
+</div>
+<div id="masterWrap">
+  <h2>MASTER SCREEN: control this one, all <span id="tot1">20</span> mirror screens copy it</h2>
+  <div id="masterBox"></div>
+</div>
+<details>
+  <summary>Shorts cutter (your own video file)</summary>
+  <div class="cut">
+    <label>1. Choose a video from your phone (only videos you own or have rights to)</label>
+    <input type="file" id="cfile" accept="video/*">
+    <video id="cvid" controls playsinline></video>
+    <label>2. Short length</label>
+    <select id="clen"></select>
+    <label>3. Start time (seconds), for one short</label>
+    <input type="number" id="cstart" min="0" value="0">
+    <div class="row">
+      <button id="cone" class="go">Make 1 short</button>
+      <button id="call">Split into all parts</button>
+      <button id="cstop">Stop</button>
+    </div>
+    <div class="info" id="cstat" style="font-size:13px;color:var(--muted)">Pick a video to begin.</div>
+    <div id="cres"></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.5">Shorts are recorded while the video plays, so a 30 second short takes about 30 seconds to make. Keep this page open and the screen on. The file is saved as WebM (or MP4 if your browser supports it).</div>
+  </div>
+</details>
+<div class="nav">
+  <button id="first">#1</button>
+  <span class="info" id="info"></span>
+  <input class="jump" id="jump" type="number" min="1" max="20" placeholder="Screen #">
+  <button id="jgo">Go</button>
+</div>
+<div class="nav">
+  <span class="info" id="prog" style="text-align:left"></span>
+  <button id="reset" style="flex:none">Restart</button>
+</div>
+<div class="grid" id="grid"></div>
+<p class="note">A mirror screen is a copy of the master screen. Choose how many mirrors you want from the dropdown (20, 40, 100, 200, 400 and so on, all the way up to 180000); they are numbered from 1. Just keep scrolling down: new mirrors start up as you reach them and sync with the master automatically, and screens far behind you are paused and unloaded so your phone doesn't freeze. Use the number box to jump to any mirror that is already unlocked. Mirrors also unlock slowly over time: every 2 to 3 seconds (random), 5 to 10 new ones (random) appear, paced so that reaching 180000 takes at least one full day. Keep this page open; your progress is saved on this device. For YouTube, play, pause and seeking are all copied (mirrors stay muted). For links like Instagram or TikTok, every screen opens the same link, but scrolling or tapping in the master cannot be copied.</p>
+<script>
+var LIMIT=0, TOTAL=20, ROW=312, MAXLIVE=30;
+var base=0, first=0, last=0, cols=1, els={}, mp={}, mr={};
+var ytReady=false, pending=false, yt=null, src="", master=null, mready=false, timer=null;
+var $=function(i){return document.getElementById(i)};
+var grid=$("grid"), topSp=null, botSp=null;
+var sc=document.createElement("script"); sc.src="https://www.youtube.com/iframe_api"; document.head.appendChild(sc);
+window.onYouTubeIframeAPIReady=function(){ytReady=true; if(pending){pending=false; openAll()}};
+
+function parseYT(v){
+  v=v.trim(); if(!v) return null;
+  if(!/^https?:\/\//i.test(v)) v="https://"+v;
+  var u; try{u=new URL(v)}catch(e){return null}
+  var h=u.hostname.replace(/^(www|m|music)\./,""), p=u.pathname, m, id=null;
+  if(h!=="youtube.com"&&h!=="youtu.be") return null;
+  id=u.searchParams.get("v");
+  if(!id&&h==="youtu.be") id=p.split("/")[1];
+  if(!id&&(m=p.match(/^\/(shorts|live|embed)\/([\w-]+)/))) id=m[2];
+  var list=u.searchParams.get("list");
+  return (id||list)?{id:id,list:list}:null;
+}
+function embed(v){
+  v=v.trim(); if(!v) return "";
+  if(!/^https?:\/\//i.test(v)) v="https://"+v;
+  var u; try{u=new URL(v)}catch(e){return ""}
+  var h=u.hostname.replace(/^(www|m|mobile)\./,""), p=u.pathname, m;
+  if(h==="instagram.com"&&(m=p.match(/\/(p|reel|reels|tv)\/([\w-]+)/))) return "https://www.instagram.com/"+(m[1]==="reels"?"reel":m[1])+"/"+m[2]+"/embed";
+  if(h==="tiktok.com"&&(m=p.match(/\/video\/(\d+)/))) return "https://www.tiktok.com/embed/v2/"+m[1];
+  if((h==="twitter.com"||h==="x.com")&&(m=p.match(/\/status\/(\d+)/))) return "https://platform.twitter.com/embed/Tweet.html?id="+m[1];
+  if(h==="facebook.com"||h==="fb.watch"){
+    var vid=/\/(videos|watch|reel)\b/.test(v)||h==="fb.watch";
+    return "https://www.facebook.com/plugins/"+(vid?"video":"post")+".php?show_text=true&href="+encodeURIComponent(v);
+  }
+  if(h==="vimeo.com"&&(m=p.match(/\/(\d+)/))) return "https://player.vimeo.com/video/"+m[1];
+  if(h==="open.spotify.com") return "https://open.spotify.com/embed"+p;
+  return u.href;
+}
+function box(cls,label,id){
+  var d=document.createElement("div"); d.className="screen "+cls;
+  var t=document.createElement("span"); t.className="tag"; t.textContent=label; d.appendChild(t);
+  var i=document.createElement("div"); i.id=id; i.style.cssText="width:100%;height:100%"; d.appendChild(i);
+  if(cls==="mirror"){var c=document.createElement("div"); c.className="cover"; d.appendChild(c)}
+  return d;
+}
+function msg(el,t){el.innerHTML='<div class="empty">'+t+'</div>'}
+function frame(el,s){
+  var f=document.createElement("iframe");
+  f.setAttribute("allowfullscreen","");
+  f.setAttribute("allow","autoplay; encrypted-media; picture-in-picture; clipboard-write");
+  f.loading="lazy"; f.src=s; el.appendChild(f);
+}
+function ytOpts(isMaster,start){
+  var v={playsinline:1,rel:0,controls:isMaster?1:0,disablekb:isMaster?0:1};
+  if(start>0) v.start=Math.floor(start);
+  if(yt.list&&!yt.id){v.listType="playlist";v.list=yt.list} else if(yt.list){v.list=yt.list}
+  var o={width:"100%",height:"100%",playerVars:v};
+  if(yt.id) o.videoId=yt.id;
+  return o;
+}
+function mstate(){try{return mready?master.getPlayerState():-1}catch(e){return -1}}
+function mtime(){try{return mready?master.getCurrentTime():0}catch(e){return 0}}
+
+/* ---- virtual mirrors ---- */
+function clearMirrors(){
+  Object.keys(mp).forEach(function(k){try{mp[k].destroy()}catch(e){}});
+  mp={}; mr={}; els={};
+  grid.innerHTML="";
+}
+function setupGrid(){
+  clearMirrors();
+  var w=document.documentElement.clientWidth-28;
+  cols=Math.max(1,Math.floor((w+12)/252));
+  grid.style.gridTemplateColumns="repeat("+cols+",1fr)";
+  topSp=document.createElement("div"); topSp.style.cssText="grid-column:1/-1;height:0";
+  botSp=document.createElement("div"); botSp.style.cssText="grid-column:1/-1;height:1px";
+  grid.appendChild(topSp); grid.appendChild(botSp);
+  first=last=base;
+}
+function fillOne(i){
+  var el=$("mm"+i);
+  if(yt&&ytReady){
+    var o=ytOpts(false,mtime());
+    o.events={onReady:function(e){
+      mr[i]=true; e.target.mute();
+      if(mstate()===1){try{e.target.seekTo(mtime(),true);e.target.playVideo()}catch(x){}}
+    }};
+    mp[i]=new YT.Player("mm"+i,o);
+  } else if(src){frame(el,src)}
+  else msg(el,"Add a link in the master.");
+}
+function add(i,before){
+  var d=box("mirror","Mirror "+(i+1),"mm"+i);
+  els[i]=d; grid.insertBefore(d,before); fillOne(i);
+}
+function rm(i){
+  if(mp[i]){try{mp[i].destroy()}catch(e){} delete mp[i]}
+  delete mr[i];
+  if(els[i]){els[i].remove(); delete els[i]}
+}
+function setSpacer(){topSp.style.height=((first-base)/cols*ROW)+"px"}
+function trimTop(){
+  while(last-first>MAXLIVE){for(var j=first;j<first+cols;j++) rm(j); first+=cols}
+  setSpacer();
+}
+function trimBottom(){
+  while(last-first>MAXLIVE){var n=((last-first)%cols)||cols; for(var j=last-n;j<last;j++) rm(j); last-=n}
+}
+function extendDown(){
+  var end=Math.min(LIMIT,last+cols);
+  for(var j=last;j<end;j++) add(j,botSp);
+  last=end; trimTop();
+}
+function extendUp(){
+  var s=first-cols, ref=els[first];
+  for(var j=s;j<first;j++) add(j,ref);
+  first=s; setSpacer(); trimBottom();
+}
+function check(){
+  for(var n=0;n<12;n++){
+    var bs=botSp.getBoundingClientRect().top;
+    if(last<LIMIT&&bs<window.innerHeight+900){extendDown();continue}
+    var fe=els[first];
+    if(first>base&&fe&&fe.getBoundingClientRect().top>-900){extendUp();continue}
+    break;
+  }
+  $("info").textContent=LIMIT===0?"Waiting for first mirrors...":"Live: "+(first+1)+" - "+last+" / "+LIMIT;
+}
+var ticking=false;
+window.addEventListener("scroll",function(){
+  if(ticking) return; ticking=true;
+  requestAnimationFrame(function(){ticking=false; check()});
+},{passive:true});
+function jumpTo(n){
+  base=n-1; setupGrid();
+  grid.classList.remove("inR"); void grid.offsetWidth; grid.classList.add("inR");
+  window.scrollTo(0,$("masterWrap").offsetTop+$("masterWrap").offsetHeight>0?0:0);
+  check();
+}
+
+/* ---- master ---- */
+function destroyAll(){
+  if(timer){clearInterval(timer);timer=null}
+  clearMirrors();
+  if(master){try{master.destroy()}catch(e){} master=null}
+  mready=false;
+}
+function openAll(){
+  destroyAll(); base=0;
+  var raw=$("url").value, mb=$("masterBox");
+  mb.innerHTML=""; mb.appendChild(box("master","MASTER","m0"));
+  yt=parseYT(raw); src="";
+  if(!raw.trim()){msg($("m0"),"Paste a link and press Open."); setupGrid(); check(); return}
+  if(yt){
+    if(!ytReady){pending=true; msg($("m0"),"Loading YouTube player..."); setupGrid(); check(); return}
+    var mo=ytOpts(true,0);
+    mo.events={onReady:function(){mready=true},onStateChange:function(e){
+      Object.keys(mp).forEach(function(k){
+        if(!mr[k]) return;
+        try{ if(e.data===1) mp[k].playVideo(); else if(e.data===2) mp[k].pauseVideo(); }catch(x){}
+      });
+    }};
+    master=new YT.Player("m0",mo);
+    timer=setInterval(sync,1000);
+  } else {
+    src=embed(raw);
+    if(!src){msg($("m0"),"Enter a valid link."); bad(); setupGrid(); check(); return}
+    frame($("m0"),src);
+  }
+  setupGrid(); check();
+}
+function sync(){
+  var st=mstate(); if(st===-1) return;
+  var t=mtime();
+  Object.keys(mp).forEach(function(k){
+    if(!mr[k]) return;
+    try{
+      var p=mp[k], ms=p.getPlayerState();
+      if(Math.abs(p.getCurrentTime()-t)>1.5) p.seekTo(t,true);
+      if(st===1&&ms!==1&&ms!==3) p.playVideo();
+      if(st===2&&ms===1) p.pauseVideo();
+    }catch(e){}
+  });
+}
+
+/* ---- slow random unlock (180000 takes at least 1 day) ---- */
+var MAX=180000, DAY=24*60*60*1000, unlocked=0, anchor=Date.now(), unlockTimer=null, wl=null;
+try{unlocked=Math.min(MAX,Math.max(0,parseInt(localStorage.getItem("ls_unlocked_v1"),10)||0))}catch(e){}
+function setLimit(){LIMIT=Math.min(TOTAL,unlocked)}
+function saveU(){try{localStorage.setItem("ls_unlocked_v1",String(unlocked))}catch(e){}}
+function updateProg(){
+  var left=(MAX-unlocked)/MAX*DAY, h=Math.floor(left/3600000), m=Math.floor(left%3600000/60000);
+  $("prog").textContent=unlocked>=MAX?"All "+MAX+" unlocked":"Unlocked "+unlocked+" / "+MAX+" - about "+h+"h "+m+"m to go";
+}
+function apply(){setLimit(); check(); updateProg()}
+function startUnlock(){
+  anchor=Date.now()-unlocked/MAX*DAY;
+  if(unlockTimer) clearTimeout(unlockTimer);
+  apply();
+  (function loop(){
+    if(unlocked>=MAX) return;
+    var wait=2000+Math.random()*1000;
+    unlockTimer=setTimeout(function(){
+      var batch=5+Math.floor(Math.random()*6);
+      var nc=Math.min(MAX,unlocked+batch);
+      var extra=Math.max(0,anchor+nc/MAX*DAY-Date.now());
+      unlockTimer=setTimeout(function(){unlocked=nc; saveU(); apply(); SND.unlock(); buzz("unlock"); loop()},extra);
+    },wait);
+  })();
+}
+function keepAwake(){
+  try{if(navigator.wakeLock&&!wl){navigator.wakeLock.request("screen").then(function(l){wl=l; l.addEventListener("release",function(){wl=null})}).catch(function(){})}}catch(e){}
+}
+document.addEventListener("visibilitychange",function(){if(!document.hidden) keepAwake()});
+$("snd").onclick=function(){
+  soundOn=!soundOn;
+  $("snd").textContent="Sound: "+(soundOn?"On":"Off");
+  try{localStorage.setItem("ls_sound_v1",soundOn?"on":"off")}catch(e){}
+  if(soundOn) SND.tap();
+};
+$("snd").textContent="Sound: "+(soundOn?"On":"Off");
+$("reset").onclick=function(){
+  if(confirm("Restart unlocking from 0?")){unlocked=0; saveU(); startUnlock(); jumpTo(1)}
+};
+
+/* ---- controls ---- */
+var cnt=$("cnt");
+[20,40,100,200,400,800,1600,3200,6400,12800,25600,51200,102400,180000].forEach(function(n){
+  var o=document.createElement("option"); o.value=n; o.textContent=n+" mirrors"; cnt.appendChild(o);
+});
+cnt.value=20;
+cnt.onchange=function(){
+  TOTAL=+cnt.value; setLimit();
+  $("tot1").textContent=TOTAL; $("jump").max=TOTAL;
+  jumpTo(1);
+};
+$("go").onclick=function(){keepAwake(); openAll()};
+$("url").addEventListener("keydown",function(e){if(e.key==="Enter")openAll()});
+$("first").onclick=function(){jumpTo(1)};
+$("jgo").onclick=function(){
+  var v=parseInt($("jump").value,10);
+  if(v>=1&&v<=LIMIT) jumpTo(v); else bad();
+};
+$("paste").onclick=function(){
+  try{navigator.clipboard.readText().then(function(t){$("url").value=t;openAll()}).catch(function(){$("url").focus()})}catch(e){$("url").focus()}
+};
+$("ext").onclick=function(){
+  var v=$("url").value.trim(); if(!v) return;
+  if(!/^https?:\/\//i.test(v)) v="https://"+v;
+  window.open(v,"_blank","noopener");
+};
+
+/* ---- shorts cutter (own video file) ---- */
+var cv=$("cvid"), cstopFlag=false, cbusy=false, cUrl=null, cn=0;
+(function(){var sel=$("clen"); for(var n=12;n<=50;n++){var o=document.createElement("option");o.value=n;o.textContent=n+" sec";sel.appendChild(o)} sel.value=30})();
+$("cfile").onchange=function(){
+  var f=this.files&&this.files[0]; if(!f) return;
+  if(cUrl) URL.revokeObjectURL(cUrl);
+  cUrl=URL.createObjectURL(f); cv.src=cUrl; cn=0; $("cres").innerHTML="";
+  $("cstat").textContent="Loaded: "+f.name;
+};
+function cstat(t){$("cstat").textContent=t}
+function pickMime(){
+  var c=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm","video/mp4"];
+  for(var i=0;i<c.length;i++){try{if(MediaRecorder.isTypeSupported(c[i])) return c[i]}catch(e){}}
+  return "";
+}
+function recordClip(start,len){
+  return new Promise(function(res,rej){
+    var stream=null;
+    try{stream=cv.captureStream?cv.captureStream():(cv.mozCaptureStream?cv.mozCaptureStream():null)}catch(e){}
+    if(!stream||typeof MediaRecorder==="undefined"){rej(new Error("This browser cannot record video. Try Chrome."));return}
+    var mime=pickMime(), rec, chunks=[];
+    try{rec=new MediaRecorder(stream,mime?{mimeType:mime}:undefined)}catch(e){rej(e);return}
+    rec.ondataavailable=function(e){if(e.data&&e.data.size) chunks.push(e.data)};
+    rec.onstop=function(){
+      var type=rec.mimeType||mime||"video/webm";
+      res({blob:new Blob(chunks,{type:type}),ext:/mp4/.test(type)?"mp4":"webm"});
+    };
+    var go=function(){
+      cv.removeEventListener("seeked",go);
+      cv.play().then(function(){
+        rec.start();
+        var t0=Date.now();
+        var iv=setInterval(function(){
+          var done=cstopFlag||cv.ended||cv.currentTime>=start+len||(Date.now()-t0)>(len+8)*1000;
+          if(done){clearInterval(iv); cv.pause(); if(rec.state!=="inactive") rec.stop()}
+        },100);
+      }).catch(function(e){rej(e)});
+    };
+    cv.addEventListener("seeked",go);
+    cv.currentTime=start;
+    if(start===0&&cv.currentTime===0) setTimeout(go,150);
+  });
+}
+function addResult(r,len){
+  cn++;
+  var a=document.createElement("a"); a.href=URL.createObjectURL(r.blob);
+  a.download="short_"+cn+"."+r.ext; a.textContent="Download short "+cn+" ("+len+" sec, "+r.ext+")";
+  $("cres").appendChild(a);
+  try{SND.unlock(); buzz("unlock")}catch(e){}
+}
+function needVideo(){if(!cv.src){cstat("Choose a video first."); bad(); return true} return false}
+$("cone").onclick=function(){
+  if(cbusy||needVideo()) return;
+  var len=+$("clen").value, start=Math.max(0,+$("cstart").value||0);
+  cbusy=true; cstopFlag=false; cstat("Recording "+len+" sec short... keep this page open.");
+  recordClip(start,len).then(function(r){addResult(r,len); cstat("Done. Tap the download link below.")})
+   .catch(function(e){cstat("Could not record: "+e.message); bad()})
+   .then(function(){cbusy=false});
+};
+$("call").onclick=function(){
+  if(cbusy||needVideo()) return;
+  var len=+$("clen").value, dur=cv.duration;
+  if(!isFinite(dur)||dur<=0){cstat("Video is still loading, try again."); return}
+  var parts=Math.floor(dur/len), rest=dur-parts*len; if(rest>=5) parts++;
+  if(parts<1) parts=1;
+  cbusy=true; cstopFlag=false;
+  var i=0;
+  (function next(){
+    if(i>=parts||cstopFlag){cbusy=false; cstat(cstopFlag?"Stopped.":"All parts done."); return}
+    cstat("Recording part "+(i+1)+" of "+parts+"... keep this page open.");
+    recordClip(i*len,len).then(function(r){addResult(r,len); i++; next()})
+     .catch(function(e){cbusy=false; cstat("Could not record: "+e.message); bad()});
+  })();
+};
+$("cstop").onclick=function(){cstopFlag=true};
+
+/* ---- sound, vibration, effects ---- */
+var ac=null, soundOn=true;
+try{soundOn=localStorage.getItem("ls_sound_v1")!=="off"}catch(e){}
+function audio(){try{if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){} return ac}
+["pointerdown","touchstart","click","keydown"].forEach(function(ev){
+  document.addEventListener(ev,function(){var a=audio(); if(a&&a.state==="suspended") a.resume()},{passive:true});
+});
+function pop(f1,f2,type,vol){
+  if(!soundOn) return;
+  var a=audio(); if(!a) return;
+  var play=function(){
+    var o=a.createOscillator(), g=a.createGain(), t=a.currentTime;
+    o.type=type||"sine";
+    o.frequency.setValueAtTime(f1,t); o.frequency.exponentialRampToValueAtTime(f2,t+0.09);
+    g.gain.setValueAtTime(vol||0.5,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.18);
+  };
+  if(a.state==="suspended") a.resume().then(play).catch(play); else play();
+}
+var SND={
+  tap:function(){pop(500,900)},
+  go:function(){pop(600,900); setTimeout(function(){pop(900,1400)},90); setTimeout(function(){pop(1200,1800,"triangle",0.35)},180)},
+  mirror:function(){pop(300,650,"sine",0.6)},
+  unlock:function(){pop(700,1000,"sine",0.3); setTimeout(function(){pop(1000,1500,"sine",0.25)},70)},
+  err:function(){pop(220,110,"square",0.3)}
+};
+var VIB={unlock:8,tap:12,go:[25,40,25,40,45],mirror:[8,18,8],err:[60,40,60]};
+function buzz(k){try{if(navigator.vibrate) navigator.vibrate(VIB[k])}catch(e){}}
+function ripple(el,x,y){
+  var r=el.getBoundingClientRect(), d=document.createElement("span");
+  d.className="rip"; d.style.left=(x-r.left)+"px"; d.style.top=(y-r.top)+"px";
+  el.appendChild(d); setTimeout(function(){d.remove()},650);
+}
+function burst(x,y){
+  var cols2=["#d9622b","#f2b134","#3aa675","#4a7fe0","#c64fb0"];
+  for(var i=0;i<16;i++){
+    var s=document.createElement("span"); s.className="spark";
+    s.style.left=x+"px"; s.style.top=y+"px"; s.style.background=cols2[i%cols2.length];
+    document.body.appendChild(s);
+    var a=Math.random()*Math.PI*2, dist=40+Math.random()*70;
+    s.animate([{transform:"translate(0,0) scale(1)",opacity:1},{transform:"translate("+Math.cos(a)*dist+"px,"+Math.sin(a)*dist+"px) scale(0)",opacity:0}],{duration:600+Math.random()*300,easing:"cubic-bezier(.2,.8,.3,1)"});
+    (function(el){setTimeout(function(){el.remove()},950)})(s);
+  }
+}
+function bad(){
+  SND.err(); buzz("err");
+  var u=$("url"); u.classList.remove("shake"); void u.offsetWidth; u.classList.add("shake");
+}
+document.addEventListener("pointerdown",function(e){
+  if(e.target.closest&&e.target.closest("select")){SND.tap(); buzz("tap"); return}
+  var b=e.target.closest&&e.target.closest("button");
+  if(b){
+    var kind=(b.id==="go"||b.id==="jgo")?"go":"tap";
+    ripple(b,e.clientX,e.clientY); SND[kind](); buzz(kind);
+    if(b.id==="go") burst(e.clientX,e.clientY);
+    return;
+  }
+  var m=e.target.closest&&e.target.closest(".screen.mirror");
+  if(m){
+    ripple(m,e.clientX,e.clientY); SND.mirror(); buzz("mirror");
+    m.classList.remove("popfx"); void m.offsetWidth; m.classList.add("popfx");
+  }
+});
+openAll();
+startUnlock();
+</script>
+</body>
+</html>
